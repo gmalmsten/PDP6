@@ -12,31 +12,30 @@
 ################################################################################
 
 # Extract tar, enter directory, build (clean first and check that files were removed)
-# echo "Extracting and entering A1 directory"
-# tar -xzf A1.tar.gz || exit 1
-# cd A1 || exit 1
-# report=`find . -maxdepth 1 -name "A1_Report.pdf" | wc -l`
-# if [ 1 != "$report" ]; then
-# 	echo "A1_Report.pdf is missing!"
-# 	exit 1
-# fi
-# echo "Building"
-# make clean || exit 1
-# binary=`find . -maxdepth 1 -name "stencil" | wc -l`
-# if [ 0 != "$binary" ]; then
-# 	echo "make clean does not work as expected!"
-# 	exit 1
-# fi
-# make || exit 1
-# binary=`find . -maxdepth 1 -name "stencil" | wc -l`
-# if [ 1 != "$binary" ]; then
-# 	echo "stencil not built by 'make all'!"
-# 	exit 1
-# fi
-# echo "OK"
+echo "Extracting and entering A1 directory"
+tar -xzf A1.tar.gz || exit 1
+cd A1 || exit 1
+report=`find . -maxdepth 1 -name "A1_Report.pdf" | wc -l`
+if [ 1 != "$report" ]; then
+	echo "A1_Report.pdf is missing!"
+	exit 1
+fi
+echo "Building"
+make clean || exit 1
+binary=`find . -maxdepth 1 -name "stencil" | wc -l`
+if [ 0 != "$binary" ]; then
+	echo "make clean does not work as expected!"
+	exit 1
+fi
+make || exit 1
+binary=`find . -maxdepth 1 -name "stencil" | wc -l`
+if [ 1 != "$binary" ]; then
+	echo "stencil not built by 'make all'!"
+	exit 1
+fi
+echo "OK"
 
 echo "Checking result of serial runs"
-cd A1
 applications=( 1 4 )
 for appl in ${applications[@]}; do
 	./stencil ../test_data/input96.txt test_output96.txt $appl > /dev/null
