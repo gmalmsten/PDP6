@@ -12,6 +12,9 @@ all: $(BIN)
 
 stencil: stencil.c stencil.h
 	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
+
+stencil_serial: stencil_serial.c stencil.h
+	$(CC) $(CFLAGS) -o $@ $< $(LIBS)
 	
 clean:
 	$(RM) $(BIN)

@@ -12,8 +12,8 @@
 ################################################################################
 
 # Extract tar, enter directory, build (clean first and check that files were removed)
-echo "Extracting and entering A1 directory"
-tar -xzf A1.tar.gz || exit 1
+# echo "Extracting and entering A1 directory"
+# tar -xzf A1.tar.gz || exit 1
 cd A1 || exit 1
 report=`find . -maxdepth 1 -name "A1_Report.pdf" | wc -l`
 if [ 1 != "$report" ]; then
