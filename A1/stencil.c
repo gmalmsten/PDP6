@@ -105,9 +105,9 @@ int main(int argc, char **argv) {
 	// Stop timer
 	double my_execution_time = MPI_Wtime() - start;
 
+	// Print results
+	if(rank == 0) printf("Took %fs\n", my_execution_time);
 
-	// Write result
-	printf("Took %fs\n", my_execution_time);
 #ifdef PRODUCE_OUTPUT_FILE
 	if (0 != write_output(output_name, global_output, num_values)) {
 		return 2;
