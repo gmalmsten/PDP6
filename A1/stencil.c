@@ -1,6 +1,8 @@
 #include "stencil.h"
 #include <string.h>
 
+#define PRODUCE_OUTPUT_FILE 0
+
 
 int main(int argc, char **argv) {
 	if (4 != argc) {
@@ -32,6 +34,7 @@ int main(int argc, char **argv) {
 
 	// Start timer
 	double start = MPI_Wtime();
+	double end;
 	
 
 	// Initialize MPI and assign sub lists
@@ -92,8 +95,12 @@ int main(int argc, char **argv) {
 		}
 
 	}
+
+	// Stop timer
+	double my_execution_time = MPI_Wtime() - start;
 	
 	// gather data
+	MPI_Reduce(&my_execution_time, &end, 1, MPI_DOUBLE, MPI_MAX, 0, CIRC_COMM);
 	MPI_Gather(output, chunkSz, MPI_DOUBLE, global_output, chunkSz, MPI_DOUBLE, 0, CIRC_COMM);
 	free(output);
 
@@ -102,8 +109,7 @@ int main(int argc, char **argv) {
 	free(input);
 	free(sub_list);
 	MPI_Finalize();
-	// Stop timer
-	double my_execution_time = MPI_Wtime() - start;
+
 
 	// Print results
 	if(rank == 0) printf("Took %fs\n", my_execution_time);
