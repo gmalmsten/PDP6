@@ -32,9 +32,7 @@ int main(int argc, char **argv) {
 	const int EXTENT = STENCIL_WIDTH/2;
 	const double STENCIL[] = {1.0/(12*h), -8.0/(12*h), 0.0, 8.0/(12*h), -1.0/(12*h)};
 
-	// Start timer
-	double start = MPI_Wtime();
-	double end;
+
 	
 
 	// Initialize MPI and assign sub lists
@@ -61,6 +59,11 @@ int main(int argc, char **argv) {
 	
 	MPI_Cart_create(MPI_COMM_WORLD, 1, dims, periods, reorder, &CIRC_COMM);
 	MPI_Cart_shift(CIRC_COMM, 0, -1, &right, &left);
+
+	// Start timer
+	double start = MPI_Wtime();
+	double time;
+
 
 	// Allocate data for result
 	double *output;
@@ -100,7 +103,7 @@ int main(int argc, char **argv) {
 	double my_execution_time = MPI_Wtime() - start;
 	
 	// gather data
-	MPI_Reduce(&my_execution_time, &end, 1, MPI_DOUBLE, MPI_MAX, 0, CIRC_COMM);
+	MPI_Reduce(&my_execution_time, &time, 1, MPI_DOUBLE, MPI_MAX, 0, CIRC_COMM);
 	MPI_Gather(output, chunkSz, MPI_DOUBLE, global_output, chunkSz, MPI_DOUBLE, 0, CIRC_COMM);
 	free(output);
 
@@ -112,12 +115,12 @@ int main(int argc, char **argv) {
 
 
 	// Print results
-	if(rank == 0) printf("Took %fs\n", my_execution_time);
+	if(rank == 0) printf("Took %fs\n", time);
 
 #ifdef PRODUCE_OUTPUT_FILE
-	if (0 != write_output(output_name, global_output, num_values)) {
-		return 2;
-	}
+	// if (0 != write_output(output_name, global_output, num_values)) {
+	// 	return 2;
+	// }
 #endif
 
 	// Clean up
