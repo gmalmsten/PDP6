@@ -1,0 +1,38 @@
+Took 0.702542s
+Took 0.358697s
+Took 0.605238s
+Took 0.698426s
+Took 0.091578s
+Took 0.093159s
+n
+New run
+Took 0.988341s
+Took 0.497961s
+Took 0.605717s
+Took 0.681099s
+Took 0.156289s
+Took 0.164292s
+n
+New run
+Took 0.915830s
+Took 0.377134s
+Took 0.639886s
+Took 0.691192s
+Took 0.103238s
+Took 0.114089s
+n
+New run
+Took 0.706233s
+Took 0.379075s
+Took 0.602186s
+Took 0.694319s
+Took 0.086181s
+Took 0.091930s
+n
+New run
+Took 0.710092s
+Took 0.495345s
+Took 0.682732s
+Took 0.726972s
+Took 0.114831s
+Took 0.161144s
