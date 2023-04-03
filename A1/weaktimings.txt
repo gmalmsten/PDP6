@@ -1,0 +1,6 @@
+Took 0.708979s
+Took 0.724634s
+Took 1.129856s
+Took 1.477219s
+Took 1.282406s
+Took 2.381665s
