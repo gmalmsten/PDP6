@@ -37,35 +37,37 @@ int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 
 	int rank, right, left, num_proc;
-	
 	MPI_Comm_size(MPI_COMM_WORLD, &num_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	
+	// Assumption num_values%num_proc = 0
+	// Allocate memory for EXTENT extra elements at beginning and end of sub array
 	int chunkSz = num_values/num_proc;
-
 	double * sub_list = (double *)malloc((chunkSz + 2*EXTENT)*sizeof(double));
-	// memcpy(&sub_list[EXTENT], &input[rank*chunkSz], chunkSz*sizeof(double));
 	
 
-	// Create circular topology
+	// Create circular virtual topology
 	MPI_Comm CIRC_COMM;
 	int dims[1];
 	int periods[1];
 	int reorder = 0;
-
 	dims[0] = num_proc;
 	periods[0] = 1;
 	
 	MPI_Cart_create(MPI_COMM_WORLD, 1, dims, periods, reorder, &CIRC_COMM);
 	MPI_Cart_shift(CIRC_COMM, 0, -1, &right, &left);
+
+
+	// Distribute data to processes
 	MPI_Scatter(input, chunkSz, MPI_DOUBLE, &sub_list[EXTENT], chunkSz, MPI_DOUBLE, 0, CIRC_COMM);
+
 
 	// Start timer
 	double start = MPI_Wtime();
 	double time;
 
 
-	// Allocate data for result
+	// Allocate memory for result
 	double *output;
 	if (NULL == (output = malloc((chunkSz) * sizeof(double)))) {
 		perror("Couldn't allocate memory for output");
@@ -78,14 +80,15 @@ int main(int argc, char **argv) {
 		MPI_Request request[2];
 		MPI_Status status[2];
 
-		MPI_Isend(&sub_list[EXTENT], EXTENT, MPI_DOUBLE, left, 1, CIRC_COMM, &request[0]);
+		MPI_Isend(&sub_list[ EXTENT], EXTENT, MPI_DOUBLE, left, 1, CIRC_COMM, &request[0]);
 		MPI_Isend(&sub_list[chunkSz], EXTENT, MPI_DOUBLE, right, 2, CIRC_COMM, &request[1]);
 		
+
+		// Store at beginning and end of sub array
 		MPI_Recv(sub_list, EXTENT, MPI_DOUBLE, left, 2, CIRC_COMM, &status[0]);
 		MPI_Recv(&sub_list[chunkSz+EXTENT], EXTENT, MPI_DOUBLE, right, 1, CIRC_COMM, &status[1]);
 
 		// Apply stencil
-		// done by each process
 		for (int i=EXTENT; i<chunkSz+EXTENT; i++) {
 			double result = 0;
 			for (int j=0; j<STENCIL_WIDTH; j++) {
@@ -95,6 +98,8 @@ int main(int argc, char **argv) {
 			output[i-EXTENT] = result;
 		}
 	
+		// Wait for Isend to complete and then update 
+		// sub array for next stencil application
 		if (s < num_steps-1) {
 			MPI_Waitall(2, request, status);
 			memcpy(&sub_list[EXTENT], output, chunkSz*sizeof(double));
@@ -105,10 +110,12 @@ int main(int argc, char **argv) {
 	// Stop timer
 	double my_execution_time = MPI_Wtime() - start;
 	
-	// gather data
-	MPI_Reduce(&my_execution_time, &time, 1, MPI_DOUBLE, MPI_MAX, 0, CIRC_COMM);
+	// Gather data and reduce execution times
 	MPI_Gather(output, chunkSz, MPI_DOUBLE, global_output, chunkSz, MPI_DOUBLE, 0, CIRC_COMM);
+	MPI_Reduce(&my_execution_time, &time, 1, MPI_DOUBLE, MPI_MAX, 0, CIRC_COMM);
 
+
+	// Clean up
 	free(output);
 	free(input);
 	free(sub_list);
@@ -117,7 +124,7 @@ int main(int argc, char **argv) {
 
 	// Print results
 	if(rank == 0) {
-		printf("Took %fs\n", time);
+		printf("%f\n", time);
 
 		#ifdef PRODUCE_OUTPUT_FILE
 			if (0 != write_output(output_name, global_output, num_values)) {
@@ -126,6 +133,7 @@ int main(int argc, char **argv) {
 		#endif
 	}
 	MPI_Finalize();
+	
 	// Clean up
 	free(global_output);
 
