@@ -15,16 +15,6 @@ int main(int argc, char **argv) {
 	double *input;
 	double *global_output;
 	int num_values;
-
-
-	if (NULL == (global_output = malloc(num_values * sizeof(double)))) {
-		perror("Couldn't allocate memory for output");
-		return 2;
-	}
-
-	
-
-
 	
 
 	// Initialize MPI and assign sub lists
@@ -39,8 +29,6 @@ int main(int argc, char **argv) {
 		return 2;
 	}
 	}
-	
-	
 	
 
 	// Create circular virtual topology
@@ -75,8 +63,13 @@ int main(int argc, char **argv) {
 	// Distribute data to processes
 	MPI_Scatter(input, chunkSz, MPI_DOUBLE, &sub_list[EXTENT], chunkSz, MPI_DOUBLE, 0, CIRC_COMM);
 
-
-
+	if(rank == 0){
+		free(input);
+		if (NULL == (global_output = malloc(num_values * sizeof(double)))) {
+			perror("Couldn't allocate memory for output");
+			return 2;
+	}
+	}
 
 	// Start timer
 	double start = MPI_Wtime();
@@ -133,7 +126,6 @@ int main(int argc, char **argv) {
 
 	// Clean up
 	free(output);
-	free(input);
 	free(sub_list);
 	
 
