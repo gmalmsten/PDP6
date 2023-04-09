@@ -136,12 +136,12 @@ int main(int argc, char **argv)
 
 	// Clean up
 	free(output);
-	free(input);
 	free(sub_list);
 
 	// Print results
 	if (rank == 0)
-	{
+	{	
+		free(input);
 		printf("%f\n", time);
 
 #ifdef PRODUCE_OUTPUT_FILE
