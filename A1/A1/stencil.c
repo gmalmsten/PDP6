@@ -30,7 +30,7 @@ int main(int argc, char **argv)
 	MPI_Cart_create(MPI_COMM_WORLD, 1, dims, periods, reorder, &CIRC_COMM);
 	MPI_Cart_shift(CIRC_COMM, 0, -1, &right, &left);
 
-	// Read input file
+	// Read input file and allocate memory for output
 	double *input;
 	double *global_output;
 	int num_values;
@@ -41,14 +41,18 @@ int main(int argc, char **argv)
 		{
 			return 2;
 		}
+
+
+		if (NULL == (global_output = malloc(num_values * sizeof(double))))
+		{
+			perror("Couldn't allocate memory for output");
+			return 2;
+		}
 	}
 	MPI_Bcast(&num_values, 1, MPI_INT, 0, CIRC_COMM);
 
-	if (NULL == (global_output = malloc(num_values * sizeof(double))))
-	{
-		perror("Couldn't allocate memory for output");
-		return 2;
-	}
+
+	
 
 	// Stencil values
 	double h = 2.0 * PI / num_values;
@@ -145,16 +149,17 @@ int main(int argc, char **argv)
 		printf("%f\n", time);
 
 #ifdef PRODUCE_OUTPUT_FILE
-		if (0 != write_output(output_name, global_output, num_values))
-		{
-			return 2;
-		}
-#endif
+	if (0 != write_output(output_name, global_output, num_values))
+	{
+		return 2;
 	}
-	MPI_Finalize();
-
+#endif
 	// Clean up
 	free(global_output);
+	}
+
+
+	MPI_Finalize();
 
 	return 0;
 }
