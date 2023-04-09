@@ -12,8 +12,9 @@ int main(int argc, char **argv)
 	char *output_name = argv[2];
 	int num_steps = atoi(argv[3]);
 
-	// Initialize MPI
+	// Initialize MPI and assign sub lists
 	MPI_Init(&argc, &argv);
+
 	int rank, right, left, num_proc;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
@@ -41,15 +42,13 @@ int main(int argc, char **argv)
 			return 2;
 		}
 
-
 		if (NULL == (global_output = malloc(num_values * sizeof(double))))
 		{
 			perror("Couldn't allocate memory for output");
 			return 2;
 		}
 	}
-
-	// Broadcast set up variables
+	// Broadcast set up parameters
 	MPI_Bcast(&num_values, 1, MPI_INT, 0, CIRC_COMM);
 
 
@@ -89,7 +88,7 @@ int main(int argc, char **argv)
 		MPI_Isend(&sub_list[EXTENT], EXTENT, MPI_DOUBLE, left, 1, CIRC_COMM, &request[0]);
 		MPI_Isend(&sub_list[chunkSz], EXTENT, MPI_DOUBLE, right, 2, CIRC_COMM, &request[1]);
 
-		// Apply stencil on middle elements 
+		// Apply stencil on middle elements
 		for (int i = EXTENT * 2; i < chunkSz; i++)
 		{
 			double result = 0;
@@ -101,11 +100,9 @@ int main(int argc, char **argv)
 			output[i - EXTENT] = result;
 		}
 
-		// Recieve edge data from neighbouring processes
+		// Recieve data from edges
 		MPI_Recv(sub_list, EXTENT, MPI_DOUBLE, left, 2, CIRC_COMM, &status[0]);
 		MPI_Recv(&sub_list[chunkSz + EXTENT], EXTENT, MPI_DOUBLE, right, 1, CIRC_COMM, &status[1]);
-
-
 		// Apply stencil on edge elements
 		for (int i = EXTENT; i < EXTENT * 2; i++)
 		{
@@ -146,7 +143,7 @@ int main(int argc, char **argv)
 	// Print results
 	if (rank == 0)
 	{	
-		printf("%f\n", time);
+	printf("%f\n", time);
 
 #ifdef PRODUCE_OUTPUT_FILE
 	if (0 != write_output(output_name, global_output, num_values))
@@ -158,6 +155,7 @@ int main(int argc, char **argv)
 	free(input);
 	free(global_output);
 	}
+
 
 	MPI_Finalize();
 

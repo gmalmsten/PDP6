@@ -42,17 +42,15 @@ int main(int argc, char **argv)
 			return 2;
 		}
 
-
 		if (NULL == (global_output = malloc(num_values * sizeof(double))))
 		{
 			perror("Couldn't allocate memory for output");
 			return 2;
 		}
 	}
+	// Broadcast set up parameters
 	MPI_Bcast(&num_values, 1, MPI_INT, 0, CIRC_COMM);
 
-
-	
 
 	// Stencil values
 	double h = 2.0 * PI / num_values;
@@ -72,7 +70,7 @@ int main(int argc, char **argv)
 	double start = MPI_Wtime();
 	double time;
 
-	// Allocate memory for result
+	// Allocate memory for local result
 	double *output;
 	if (NULL == (output = malloc((chunkSz) * sizeof(double))))
 	{
@@ -102,7 +100,7 @@ int main(int argc, char **argv)
 			output[i - EXTENT] = result;
 		}
 
-		// Recive data from edges
+		// Recieve data from edges
 		MPI_Recv(sub_list, EXTENT, MPI_DOUBLE, left, 2, CIRC_COMM, &status[0]);
 		MPI_Recv(&sub_list[chunkSz + EXTENT], EXTENT, MPI_DOUBLE, right, 1, CIRC_COMM, &status[1]);
 		// Apply stencil on edge elements
@@ -145,8 +143,7 @@ int main(int argc, char **argv)
 	// Print results
 	if (rank == 0)
 	{	
-		free(input);
-		printf("%f\n", time);
+	printf("%f\n", time);
 
 #ifdef PRODUCE_OUTPUT_FILE
 	if (0 != write_output(output_name, global_output, num_values))
@@ -155,6 +152,7 @@ int main(int argc, char **argv)
 	}
 #endif
 	// Clean up
+	free(input);
 	free(global_output);
 	}
 
