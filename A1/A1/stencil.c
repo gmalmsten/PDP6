@@ -15,20 +15,14 @@ int main(int argc, char **argv) {
 	double *input;
 	double *global_output;
 	int num_values;
-	if (0 > (num_values = read_input(input_name, &input))) {
-		return 2;
-	}
+
 
 	if (NULL == (global_output = malloc(num_values * sizeof(double)))) {
 		perror("Couldn't allocate memory for output");
 		return 2;
 	}
 
-	// Stencil values
-	double h = 2.0*PI/num_values;
-	const int STENCIL_WIDTH = 5;
-	const int EXTENT = STENCIL_WIDTH/2;
-	const double STENCIL[] = {1.0/(12*h), -8.0/(12*h), 0.0, 8.0/(12*h), -1.0/(12*h)};
+	
 
 
 	
@@ -39,11 +33,14 @@ int main(int argc, char **argv) {
 	int rank, right, left, num_proc;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_proc);
 	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+	if(rank==0){
+		if (0 > (num_values = read_input(input_name, &input))) {
+		return 2;
+	}
+	}
 	
-	// Assumption num_values%num_proc = 0
-	// Allocate memory for EXTENT extra elements at beginning and end of sub array
-	int chunkSz = num_values/num_proc;
-	double * sub_list = (double *)malloc((chunkSz + 2*EXTENT)*sizeof(double));
+	
 	
 
 	// Create circular virtual topology
@@ -58,8 +55,27 @@ int main(int argc, char **argv) {
 	MPI_Cart_shift(CIRC_COMM, 0, -1, &right, &left);
 
 
+	// Broadcast configuration parameter
+	MPI_Bcast(&num_values, 1, MPI_INT, 0, CIRC_COMM);
+	int chunkSz = num_values/num_proc;
+	
+
+	// Stencil values
+	double h = 2.0*PI/num_values;
+	const int STENCIL_WIDTH = 5;
+	const int EXTENT = STENCIL_WIDTH/2;
+	const double STENCIL[] = {1.0/(12*h), -8.0/(12*h), 0.0, 8.0/(12*h), -1.0/(12*h)};
+
+
+	// Assumption num_values%num_proc = 0
+	// Allocate memory for EXTENT extra elements at beginning and end of sub array
+	double * sub_list = (double *)malloc((chunkSz + 2*EXTENT)*sizeof(double));
+
+
 	// Distribute data to processes
 	MPI_Scatter(input, chunkSz, MPI_DOUBLE, &sub_list[EXTENT], chunkSz, MPI_DOUBLE, 0, CIRC_COMM);
+
+
 
 
 	// Start timer
