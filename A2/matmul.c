@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <mpi.h>
 #include <math.h>
+#include <cblas.h>
 
 int read_input(const char *file_name, double **input){
     	FILE *file;
@@ -69,8 +70,8 @@ int main(int argc, char *argv[]){
     MPI_Cart_coords(GRID_COMM, rank, 2, coords);
     printf("Rank %d coords (%d, %d)\n", rank, coords[0], coords[1]);
     // Initialize matrices
-    double *A, *input;
-    int n;
+    double *A, *B, *C, *input;
+    int n, m;
 
     // Source process reads input
     if(rank == 0){
@@ -97,26 +98,39 @@ int main(int argc, char *argv[]){
 
     // Broadcast set up parameters
     MPI_Bcast(&n, 1, MPI_INT, 0, GRID_COMM);
-
+    m = n/num_proc;
 
     // Define matrix type
     MPI_Datatype matrixtype;
-    MPI_Type_vector(n/dims[0], n/dims[0], n, MPI_DOUBLE, &matrixtype);
-    MPI_Type_commit(&matrixtype);
+    MPI_Type_vector(m, n, n, MPI_DOUBLE, &matrixtype);
+
+    // MPI_Datatype matrixtype;
+    // MPI_Type_vector(sub_n, sub_n, n, MPI_DOUBLE, &matrixtype);
+    // MPI_Type_commit(&matrixtype);
 
 
     // Scatter matrices to processes
-    int sub_n = n/sqrt(num_proc);
-    A = (double *)malloc(sub_n*sub_n*sizeof(double));
-    MPI_Scatter(input, 1, matrixtype, A, sub_n*sub_n, MPI_DOUBLE, 0, GRID_COMM);
+    A = (double *)malloc((n*m)*sizeof(double));
+    B = (double *)malloc((n*m)*sizeof(double));
+    MPI_Scatter(input, 1, matrixtype, A, n*m, MPI_DOUBLE, 0, GRID_COMM);
+    MPI_Scatter(&input[n*n], 1, matrixtype, B, n*m, MPI_DOUBLE, 0, GRID_COMM);
 
 
+    // Print submatrices as rows
+    // printf("Rank %d ", rank);
+    // for(int i = 0; i < n*n/(num_proc); i++){
+    //     printf("%lf ", A[i]);
+    // }
+    // printf("\n");
 
-    printf("Rank %d ", rank);
-    for(int i = 0; i < n*n/(num_proc); i++){
-        printf("%lf ", AB[i]);
-    }
-    printf("\n");
+    //     printf("Rank %d ", rank);
+    // for(int i = 0; i < n*n/(num_proc); i++){
+    //     printf("%lf ", B[i]);
+    // }
+    // printf("\n");
+
+    // Allocate memory for local result
+    C = (double *)malloc(n*m*sizeof(double));
     
     MPI_Type_free(&matrixtype);
     MPI_Finalize();
