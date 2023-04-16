@@ -4,7 +4,7 @@
 
 CC = mpicc
 CFLAGS = -std=c99 -g -Ofast -Wall 
-LIBS = -lm
+LIBS = -lm -lblas
 
 BIN = matmul test
 
