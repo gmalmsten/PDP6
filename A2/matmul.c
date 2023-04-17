@@ -5,6 +5,8 @@
 #include <cblas.h>
 
 #define IND(i,j)  i*n+j
+#define N_LIM 10
+#define PRODUCE_OUTPUT_FILE
 
 int read_input(const char *file_name, double **input){
     	FILE *file;
@@ -39,7 +41,28 @@ int read_input(const char *file_name, double **input){
 	return n;
 }
 
+int write_output(char *file_name, const double *output, int num_values) {
+	FILE *file;
+	if (NULL == (file = fopen(file_name, "w"))) {
+		perror("Couldn't open output file");
+		return -1;
+	}
+	for (int i = 0; i < num_values; i++) {
+		if (0 > fprintf(file, "%.4f ", output[i])) {
+			perror("Couldn't write to output file");
+		}
+	}
+	if (0 > fprintf(file, "\n")) {
+		perror("Couldn't write to output file");
+	}
+	if (0 != fclose(file)) {
+		perror("Warning: couldn't close output file");
+	}
+	return 0;
+}
+
 void print_matrix(int n,int m, double *A){
+    if(n<N_LIM)
     for(int i = 0; i<n; i++){
         for(int j = 0; j<m; j++){
             printf("%lf ", A[i*n+j]);
@@ -136,61 +159,64 @@ int main(int argc, char *argv[]){
 
 
     // Allocate memory for local result
-    C = (double *)malloc(rect_size*sizeof(double));
     double *C_temp = (double *)malloc(avg_square*sizeof(double));
 
     MPI_Request requests[num_proc*num_proc];
 
-    for(int i = 0; i<num_proc; i++)
-    {
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, C_temp, m);
-    // cblas_dgemm (const CBLayout,transa, transb, m, n, k, alpha, *a,lda,*b, ldb, beta,*c, ldc);
-    // printf("Rank %d left: %d right %d\n", rank, left, right);
-    if(rank == 2){
-        print_matrix(m,m, C_temp);
-        printf("\n");
-        // printf("Process %d sending with tag %d \n", rank, (rank+i)%num_proc);
-    }
-    // Send local result (avg_square) to process 0, non blocking
-    MPI_Isend(C_temp, avg_square, MPI_DOUBLE, 0, rank*num_proc+(i+rank)%num_proc, GRID_COMM, &requests[rank*num_proc+i]);
-    // Send and receive columns
-    MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
-    }
-
-
-    // Receive all local results in process 0
+    // Begin the request for all local results in process 0
     if(rank == 0)
     {   
         C = (double *)malloc(matrix_size*sizeof(double));
         for(int p = 0; p < num_proc; p++){
             for(int col = 0; col < num_proc; col++)
             {
-                // MPI_Irecv(&C[rect_size*p+col*m], 1, squaretype, p, col, GRID_COMM, &requests[p*num_proc+col]);
-                MPI_Status recvstatus;
-                MPI_Recv(&C[rect_size*p+col*m], 1, squaretype, p,  p*num_proc+col, GRID_COMM, &recvstatus);
-                // printf("RECIEVED %d\n", p);
+                MPI_Irecv(&C[rect_size*p+col*m], 1, squaretype, p, p*num_proc+col, GRID_COMM, &requests[p*num_proc+col]);
+                //MPI_Recv(&C[rect_size*p+col*m], 1, squaretype, p,  p*num_proc+col, GRID_COMM, &recvstatus);
             }
         }
-        // MPI_Waitall(num_proc*num_proc, requests, MPI_STATUSES_IGNORE);
-        printf("C: \n");
-        print_matrix(n,n,C);
     }
 
 
+    // Do calculations on row and column in memory, shift columns left and repeat
+    // Send result to rank 0
+    for(int i = 0; i<num_proc; i++)
+    {
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, C_temp, m);
+        // Send local result (avg_square) to process 0, non blocking
+        MPI_Isend(C_temp, avg_square, MPI_DOUBLE, 0, rank*num_proc+(i+rank)%num_proc, GRID_COMM, &requests[rank*num_proc+i]);
+        // Send and receive columns
+        MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
+    }
 
+
+    // Wait for process 0 to receive all local results
+    if(rank==0)
+    MPI_Waitall(num_proc*num_proc, requests, MPI_STATUSES_IGNORE);
+        
     // end time
     double end_time = MPI_Wtime();
     double time = end_time - start_time;
     double max_time;
     MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, GRID_COMM);
+
+    // Print results
     if(rank == 0){
+        printf("C: \n");
+        print_matrix(n,n,C);
         printf("%lf\n", max_time);
+		#ifdef PRODUCE_OUTPUT_FILE
+			if (0 != write_output(output_name, C, n*n)) {
+				return 2;
+			}
+		#endif
+        free(C);
     }
     
-    // if(rank == 0){
-    //     printf("C: ");
-    //     print_matrix(n, C);
-    // }
+
+    // Clean up
+    free(A);
+    free(B);
+    free(C_temp);
     MPI_Type_free(&rowtype);
     MPI_Type_free(&columntype);
     MPI_Type_free(&squaretype);
