@@ -152,7 +152,7 @@ int main(int argc, char *argv[]){
         // printf("Process %d sending with tag %d \n", rank, (rank+i)%num_proc);
     }
     // Send local result (avg_square) to process 0, non blocking
-    MPI_Isend(C_temp, avg_square, MPI_DOUBLE, 0, rank*num_proc+i, GRID_COMM, &requests[rank*num_proc+i]);
+    MPI_Isend(C_temp, avg_square, MPI_DOUBLE, 0, rank*num_proc+(i+rank)%num_proc, GRID_COMM, &requests[rank*num_proc+i]);
     // Send and receive columns
     MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
     }
