@@ -6,7 +6,7 @@
 
 #define IND(i,j)  i*n+j
 #define N_LIM 10
-#define PRODUCE_OUTPUT_FILE
+// #define PRODUCE_OUTPUT_FILE
 
 int read_input(const char *file_name, double **input){
     	FILE *file;
@@ -102,7 +102,6 @@ int main(int argc, char *argv[]){
     // Initialize matrices
     double *A, *B, *C, *input;
     int n, m;
-
     // Source process reads input
     if(rank == 0){
         n = read_input(input_name, &input);
@@ -149,9 +148,14 @@ int main(int argc, char *argv[]){
     B = (double *)malloc((rect_size)*sizeof(double));
     MPI_Scatter(input, 1, rowtype, A, rect_size, MPI_DOUBLE, 0, GRID_COMM);
     // MPI_Scatter(&input[n*n], 1, matrixtype, B, n*m, MPI_DOUBLE, 0, GRID_COMM);
-    if(rank==0)
-    for(int p = 0; p < num_proc; p++){
-        MPI_Send(&input[n*n+p*m], 1, columntype, p, p, GRID_COMM);
+    if(rank==0){
+        printf("%d TEST\n", rank);               // Stupid bug here, process does not enter below loop
+        for(int p = 0; p < num_proc; p++){
+            printf("Sending to %d", rank);
+            MPI_Send(&input[n*n+p*m], 1, columntype, p, p, GRID_COMM);
+        }
+        // Does not reach here either
+        printf("TEST\n");
     }
     MPI_Status status;
     MPI_Recv(B, m*n, MPI_DOUBLE, 0, rank, GRID_COMM, &status);
@@ -180,7 +184,7 @@ int main(int argc, char *argv[]){
     // Do calculations on row and column in memory, shift columns left and repeat
     // Send result to rank 0
     for(int i = 0; i<num_proc; i++)
-    {
+    {   
         cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, C_temp, m);
         // Send local result (avg_square) to process 0, non blocking
         MPI_Isend(C_temp, avg_square, MPI_DOUBLE, 0, rank*num_proc+(i+rank)%num_proc, GRID_COMM, &requests[rank*num_proc+i]);

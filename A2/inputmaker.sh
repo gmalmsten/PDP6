@@ -1,4 +1,4 @@
-a=8
+a=32
 
 
 rm input$a.txt
