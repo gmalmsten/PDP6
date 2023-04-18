@@ -1,7 +1,7 @@
-a=32
+a=98
 
 
-rm input$a.txt
+rm -f input$a.txt
 echo -n "$a " >> input$a.txt
 for i in $(seq 1 $((2*a*a)))
 do

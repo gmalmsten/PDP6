@@ -72,7 +72,6 @@ void print_matrix(int n,int m, double *A){
 }
 
 int main(int argc, char *argv[]){
-
     if (argc != 3) {
 		printf("Usage: %s input_file output_file\n", argv[0]);
 		return 1;
@@ -105,21 +104,8 @@ int main(int argc, char *argv[]){
     // Source process reads input
     if(rank == 0){
         n = read_input(input_name, &input);
-        
-        // // Print read input
-        // printf("A: \n");
-        // print_matrix(n,n, input);
-
-        // printf("\n");
-        // printf("B: \n");
-        // for(int i = 0; i<n; i++){
-        //     for(int j = 0; j<n; j++){
-        //         printf("%lf ", input[n*n + n*i + j]);
-        //     }
-        //     printf("\n");
-        // }
     }
-
+    
     // strart time
     double start_time = MPI_Wtime();
 
@@ -147,20 +133,18 @@ int main(int argc, char *argv[]){
     A = (double *)malloc((rect_size)*sizeof(double));
     B = (double *)malloc((rect_size)*sizeof(double));
     MPI_Scatter(input, 1, rowtype, A, rect_size, MPI_DOUBLE, 0, GRID_COMM);
-    // MPI_Scatter(&input[n*n], 1, matrixtype, B, n*m, MPI_DOUBLE, 0, GRID_COMM);
+    
     if(rank==0){
-        printf("%d TEST\n", rank);               // Stupid bug here, process does not enter below loop
+        MPI_Request requests[num_proc];
         for(int p = 0; p < num_proc; p++){
-            printf("Sending to %d", rank);
-            MPI_Send(&input[n*n+p*m], 1, columntype, p, p, GRID_COMM);
+            MPI_Isend(&input[n*n+p*m], 1, columntype, p, p, GRID_COMM, &requests[p]);
         }
-        // Does not reach here either
-        printf("TEST\n");
     }
     MPI_Status status;
+    
     MPI_Recv(B, m*n, MPI_DOUBLE, 0, rank, GRID_COMM, &status);
-    free(input);
-
+    
+    
 
     // Allocate memory for local result
     double *C_temp = (double *)malloc(avg_square*sizeof(double));
@@ -192,40 +176,50 @@ int main(int argc, char *argv[]){
         MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
     }
 
+    
 
     // Wait for process 0 to receive all local results
-    if(rank==0)
+    if(rank==0){
     MPI_Waitall(num_proc*num_proc, requests, MPI_STATUSES_IGNORE);
-        
+    }
+
+    
+
+
     // end time
     double end_time = MPI_Wtime();
     double time = end_time - start_time;
     double max_time;
     MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, GRID_COMM);
 
+    
     // Print results
     if(rank == 0){
-        printf("C: \n");
-        print_matrix(n,n,C);
         printf("%lf\n", max_time);
 		#ifdef PRODUCE_OUTPUT_FILE
 			if (0 != write_output(output_name, C, n*n)) {
 				return 2;
 			}
 		#endif
+        
         free(C);
+        free(input); //-----------------------------------------------------------------------
     }
     
-
+    
     // Clean up
     free(A);
     free(B);
-    free(C_temp);
     MPI_Type_free(&rowtype);
     MPI_Type_free(&columntype);
     MPI_Type_free(&squaretype);
+    /*
+    free(C_temp);   //'''''''''''''''''''''''''
+    */
     MPI_Comm_free(&GRID_COMM);
     MPI_Finalize();
+
+    
 
     return 0;
 }

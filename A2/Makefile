@@ -3,8 +3,8 @@
 ###############################################################################
 
 CC = mpicc
-CFLAGS = -std=c99 -g -Ofast -Wall 
-LIBS = -lm -lblas
+CFLAGS = -std=c99 -g -Ofast 
+LIBS = -lm -lopenblas
 
 BIN = matmul
 
