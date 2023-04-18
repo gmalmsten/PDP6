@@ -3,6 +3,7 @@
 #include <mpi.h>
 #include <math.h>
 #include <cblas.h>
+#include <string.h>
 
 #define IND(i,j)  i*n+j
 #define N_LIM 10
@@ -63,6 +64,13 @@ void print_matrix(int n,int m, double *A){
         }
         printf("\n");
     }
+}
+
+void print(int n, double *C){
+    for(int i = 0; i < n; i++){
+        printf("%lf ", C[i]);
+    }
+    printf("\n");
 }
 
 int main(int argc, char *argv[]){
@@ -158,15 +166,28 @@ int main(int argc, char *argv[]){
         int col = (i+rank)%num_proc;
         printf("col*avg_square %d\n", col*avg_square);
 
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, &C_temp[col*m], m);
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, &C_temp[col*avg_square], m);
         // Send local result (avg_square) to process 0, non blocking
         // Send and receive columns
         MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
     }
 
+    if(rank==0){print(rect_size,C_temp);}
+    // MPI_Gather(C_temp, rect_size, MPI_DOUBLE, C, rect_size, MPI_DOUBLE, 0, GRID_COMM);   // Wrong but no segfault
 
-    MPI_Gather(C_temp, rect_size, MPI_DOUBLE, C, num_proc, squaretype, 0, GRID_COMM);
     
+    MPI_Send(C_temp, rect_size, MPI_DOUBLE, 0, rank, GRID_COMM);
+    
+    if(rank == 0){
+        // memcpy(C, C_temp, rect_size*sizeof(double));
+        for(int p = 0; p < num_proc; p++){
+            MPI_Recv(&C[p*rect_size], 4, squaretype, p, p, GRID_COMM, &status);
+            printf("Received from %d\n", p);
+        }
+    }
+    // Lyckas printa alla receives men sen blir det double free or corruption här direkt efter
+    // förmodligen fel på squaretype eller index i C
+    /*
     // end time
     double end_time = MPI_Wtime();
     double time = end_time - start_time;
@@ -186,9 +207,9 @@ int main(int argc, char *argv[]){
         // free(C);
         // free(input); //-----------------------------------------------------------------------
     }
-    
+    */
    
-    // // Clean up
+    // Clean up
     // free(A);
     // free(B);
     // MPI_Type_free(&rowtype);
