@@ -6,7 +6,7 @@
 
 #define IND(i,j)  i*n+j
 #define N_LIM 10
-// #define PRODUCE_OUTPUT_FILE
+#define PRODUCE_OUTPUT_FILE
 
 int read_input(const char *file_name, double **input){
     	FILE *file;
@@ -14,27 +14,21 @@ int read_input(const char *file_name, double **input){
 		perror("Couldn't open input file");
 		return -1;
 	}
-
 	int n;
     if (EOF == fscanf(file, "%d", &n)) {
         perror("Couldn't read element count from input file");
         return -1;
     }
-
     if (NULL == (*input = malloc(2 * n * n * sizeof(double)))) {
 		perror("Couldn't allocate memory for matrix A");
 		return -1;
 	}
-
-
     for (int i=0; i<2*n*n; i++) {
 		if (EOF == fscanf(file, "%lf", &((*input)[i]))) {
 			perror("Couldn't read elements from input file");
 			return -1;
 		}
 	}
-
-
     if (0 != fclose(file)){
 		perror("Warning: couldn't close input file");
 	}
@@ -147,52 +141,39 @@ int main(int argc, char *argv[]){
     
 
     // Allocate memory for local result
-    double *C_temp = (double *)malloc(avg_square*sizeof(double));
+    double *C_temp = (double *)malloc(rect_size*sizeof(double));
+    printf("Size of C_temp: %d\n", rect_size);
 
     MPI_Request requests[num_proc*num_proc];
 
-    // Begin the request for all local results in process 0
-    if(rank == 0)
-    {   
+    // Allocate memory for result
+    if(rank==0){
         C = (double *)malloc(matrix_size*sizeof(double));
-        for(int p = 0; p < num_proc; p++){
-            for(int col = 0; col < num_proc; col++)
-            {
-                MPI_Irecv(&C[rect_size*p+col*m], 1, squaretype, p, p*num_proc+col, GRID_COMM, &requests[p*num_proc+col]);
-                //MPI_Recv(&C[rect_size*p+col*m], 1, squaretype, p,  p*num_proc+col, GRID_COMM, &recvstatus);
-            }
-        }
     }
-
 
     // Do calculations on row and column in memory, shift columns left and repeat
     // Send result to rank 0
     for(int i = 0; i<num_proc; i++)
     {   
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, C_temp, m);
+        int col = (i+rank)%num_proc;
+        printf("col*avg_square %d\n", col*avg_square);
+
+        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, &C_temp[col*m], m);
         // Send local result (avg_square) to process 0, non blocking
-        MPI_Isend(C_temp, avg_square, MPI_DOUBLE, 0, rank*num_proc+(i+rank)%num_proc, GRID_COMM, &requests[rank*num_proc+i]);
         // Send and receive columns
         MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
     }
 
+
+    MPI_Gather(C_temp, rect_size, MPI_DOUBLE, C, num_proc, squaretype, 0, GRID_COMM);
     
-
-    // Wait for process 0 to receive all local results
-    if(rank==0){
-    MPI_Waitall(num_proc*num_proc, requests, MPI_STATUSES_IGNORE);
-    }
-
-    
-
-
     // end time
     double end_time = MPI_Wtime();
     double time = end_time - start_time;
     double max_time;
     MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, GRID_COMM);
 
-    
+     
     // Print results
     if(rank == 0){
         printf("%lf\n", max_time);
@@ -202,21 +183,21 @@ int main(int argc, char *argv[]){
 			}
 		#endif
         
-        free(C);
-        free(input); //-----------------------------------------------------------------------
+        // free(C);
+        // free(input); //-----------------------------------------------------------------------
     }
     
+   
+    // // Clean up
+    // free(A);
+    // free(B);
+    // MPI_Type_free(&rowtype);
+    // MPI_Type_free(&columntype);
+    // MPI_Type_free(&squaretype);
     
-    // Clean up
-    free(A);
-    free(B);
-    MPI_Type_free(&rowtype);
-    MPI_Type_free(&columntype);
-    MPI_Type_free(&squaretype);
-    /*
-    free(C_temp);   //'''''''''''''''''''''''''
-    */
-    MPI_Comm_free(&GRID_COMM);
+    // free(C_temp);   //'''''''''''''''''''''''''
+    
+    // MPI_Comm_free(&GRID_COMM);
     MPI_Finalize();
 
     

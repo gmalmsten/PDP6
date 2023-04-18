@@ -1,4 +1,4 @@
-a=98
+a=3600
 
 
 rm -f input$a.txt
