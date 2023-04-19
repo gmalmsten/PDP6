@@ -58,8 +58,8 @@ int write_output(char *file_name, const double *output, int num_values) {
 
 void print_matrix(int n,int m, double *A){
     if(n<N_LIM)
-    for(int i = 0; i<n; i++){
-        for(int j = 0; j<m; j++){
+    for(int i = 0; i<m; i++){
+        for(int j = 0; j<n; j++){
             printf("%lf ", A[i*n+j]);
         }
         printf("\n");
@@ -74,12 +74,11 @@ void print(int n, double *C){
 }
 
 int main(int argc, char *argv[]){
-    if (argc != 3) {
-		printf("Usage: %s input_file output_file\n", argv[0]);
+    if (argc != 1) {
+		printf("Usage: %s\n", argv[0]);
 		return 1;
 	}
-	char *input_name = argv[1];
-	char *output_name = argv[2];
+	
 
     // Initialize MPI
 	MPI_Init(&argc, &argv);
@@ -101,20 +100,20 @@ int main(int argc, char *argv[]){
 
 
     // Initialize matrices
-    double *A, *B, *C, *input;
-    int n, m;
+    double *A, *B, *C;
+    int n = 8, m;
     // Source process reads input
-    if(rank == 0){
-        n = read_input(input_name, &input);
-    }
     
+    // strart time
+    double start_time = MPI_Wtime();
 
     // Broadcast set up parameters
-    MPI_Bcast(&n, 1, MPI_INT, 0, GRID_COMM);
     m = n/num_proc;
     int avg_square = m*m;
     int rect_size = m*n;
     int matrix_size = n*n;
+
+    printf("m: %d n: %d\n", m, n);
     
     MPI_Datatype rowtype;
     MPI_Type_vector(m, n, n, MPI_DOUBLE, &rowtype);
@@ -128,98 +127,43 @@ int main(int argc, char *argv[]){
     MPI_Type_vector(m, m, n, MPI_DOUBLE, &squaretype);
     MPI_Type_commit(&squaretype);
 
-
-    // Scatter matrices to processes
-    A = (double *)malloc((rect_size)*sizeof(double));
-    B = (double *)malloc((rect_size)*sizeof(double));
-    MPI_Scatter(input, 1, rowtype, A, rect_size, MPI_DOUBLE, 0, GRID_COMM);
-    
-    // Scatter B matrices, column blocks
-    MPI_Request requests[num_proc*num_proc];
-    if(rank==0){
-        for(int p = 0; p < num_proc; p++){
-            MPI_Isend(&input[n*n+p*m], 1, columntype, p, p, GRID_COMM, &requests[p]);
-        }
-    }
     MPI_Status status;
-    MPI_Recv(B, m*n, MPI_DOUBLE, 0, rank, GRID_COMM, &status);
-    
 
     // Allocate memory for local result
     double *C_temp = (double *)malloc(rect_size*sizeof(double));
 
+    for(int i = 0; i < rect_size; i++){
+        int offset = (rank==0)*rect_size;
+        C_temp[i] = i + offset;
+    }
 
     // Allocate memory for result
     if(rank==0){
-        C = (double *)malloc(matrix_size*sizeof(double));
+        C = (double *)calloc(2*matrix_size, sizeof(double));
     }
-
-    // Start timer
-    double start_time = MPI_Wtime();
-
-    // Do calculations on row and column in memory, shift columns left and repeat
-    // Store local results in C_temp, each column row major
-    for(int i = 0; i<num_proc; i++)
-    {   
-        int col = (i+rank)%num_proc;
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, m, m, n, 1.0, A, n, B, m, 0.0, &C_temp[col*avg_square], m);
-        MPI_Sendrecv_replace(B, rect_size, MPI_DOUBLE, left, 0, right, 0, GRID_COMM, &status);
-    }
-
-    
-    // Send local result to root process
-    for(int i = 0; i<num_proc; i++){
-        int col = (rank + i)%num_proc;
-        MPI_Isend(&C_temp[col*avg_square], rect_size/num_proc, MPI_DOUBLE, 0, rank*num_proc+col, GRID_COMM, &requests[rank*num_proc+col]);
-    }
-
-    // Gather local results
-    if(rank == 0){
-        for(int p = 0; p < num_proc; p++){
-            for(int col = 0; col<num_proc; col++){
-            MPI_Irecv(&C[p*rect_size + m*col], num_proc, squaretype, p, p*num_proc+col, GRID_COMM, &requests[p*num_proc+col]);
-            }
+    MPI_Request requests[num_proc];
+    if(rank == 1){
+        for(int i = 0; i<num_proc; i++){
+        MPI_Send(&C_temp[i*rect_size/num_proc], rect_size/num_proc, MPI_DOUBLE, 0, i, GRID_COMM);
         }
+    }
+    printf("Send complete\n");
+
+    // MPI_Type_vector(m, m, n, MPI_DOUBLE, &squaretype);
+
+    if(rank == 0){
+        for(int i = 0; i < num_proc; i++){
+        MPI_Recv(&C[m*i], 1, squaretype, 1, i, GRID_COMM, &status);
+        }
+        printf("Received from %d\n", 1);
+        
     }
 
     // Wait for process 0 to receive all local results
     if(rank==0){
-        MPI_Waitall(num_proc*num_proc, requests, MPI_STATUSES_IGNORE);
-        print_matrix(n,n,C);
+        print_matrix(n, n, C);
     }
-      
 
-    // Stop timer
-    double end_time = MPI_Wtime();
-    double time = end_time - start_time;
-    double max_time;
-    MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, GRID_COMM);
-
-     
-    // Print results
-    if(rank == 0){
-        printf("%lf\n", max_time);
-		#ifdef PRODUCE_OUTPUT_FILE
-			if (0 != write_output(output_name, C, n*n)) {
-				return 2;
-			}
-		#endif
-        
-        // Clean up
-        free(C);
-        free(input); 
-    }
-    
-   
-    // Clean up
-    free(A);
-    free(B);
-    free(C_temp);   
-
-    MPI_Type_free(&rowtype);
-    MPI_Type_free(&columntype);
-    MPI_Type_free(&squaretype);
-    MPI_Comm_free(&GRID_COMM);
     MPI_Finalize();
 
     
