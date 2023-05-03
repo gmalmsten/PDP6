@@ -230,13 +230,11 @@ int main(int argc, char *argv[])
         MPI_Status status;
         int n1 = chunks[rank], n2;             // Sizes of sub lists
         MPI_Sendrecv(&n1, 1, MPI_INT, friend, rank, &n2, 1, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
-        int *list = (int *)malloc((n1 + n2)*sizeof(int));
-        memcpy(list, local_list, n1*sizeof(int));
-        MPI_Sendrecv(list, n1, MPI_INT, friend, rank, &list[n1], n2, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
-
+        local_list = (int *)realloc(local_list, (n1 + n2)*sizeof(int));
+        MPI_Sendrecv(local_list, n1, MPI_INT, friend, rank, &local_list[n1], n2, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
 
         // Merge sub lists
-        geek_merge(list, 0, n1, n1+n2);
+        geek_merge(local_list, 0, n1, n1+n2);
     }
     print_list(local_list, chunk, rank);
 
