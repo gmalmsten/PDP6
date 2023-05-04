@@ -92,10 +92,14 @@ void merge(int *list1, int *list2, int n1, int n2, int *list)
     // With inspiration from https://www.geeksforgeeks.org/merge-sort/
     // Initial indeces of list1, list2 and merged list
     int i = 0, j = 0, k = 0;
+    printf("inside merge\n");
+    print_list(list1, n1, 0);
+    print_list(list2, n2, 0);
 
-    while (i < n1 - 1 && j < n2 - 1)
+    while (i < n1 && j < n2 )
     {
         printf("inside merge\n");
+        printf("i: %d, j: %d, k: %d\n", i, j, k);
         if (list1[i] <= list2[j])
         {
             list[k] = list1[i];
@@ -109,7 +113,7 @@ void merge(int *list1, int *list2, int n1, int n2, int *list)
         k++;
     }
 
-    Copy remaining elements of list1 and list2
+    //Copy remaining elements of list1 and list2
     while (i < n1)
     {
         list[k] = list1[i];
@@ -122,6 +126,7 @@ void merge(int *list1, int *list2, int n1, int n2, int *list)
         j++;
         k++;
     }
+    printf("Merged list: \n");
     print_list(list, n1 + n2, 0);
 }
 
@@ -254,6 +259,9 @@ int main(int argc, char *argv[])
 
             memcpy(send_list, &local_list[split_index], send_n * sizeof(int));
             memcpy(remaining_list, local_list, split_index * sizeof(int));
+
+            // print list to be sent
+            
         }
         else
         {
@@ -266,26 +274,43 @@ int main(int argc, char *argv[])
             memcpy(send_list, local_list, send_n * sizeof(int));
             memcpy(remaining_list, &local_list[split_index], (chunks[rank] - split_index) * sizeof(int));
         }
-
         // Sendrecv sizes of subarrays to recv
+
         MPI_Sendrecv(&send_n, 1, MPI_INT, friend, rank, &receive_n, 1, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
         int *recived_list = (int *)malloc(receive_n * sizeof(int));
 
+        // wait for all processes to reach this point
+        MPI_Barrier(MPI_COMM_WORLD);
+
+
         // Sendrecv subarrays
-        MPI_Sendrecv(send_list, send_n, MPI_INT, friend, rank, &recived_list, receive_n, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
+        MPI_Request request;
+        MPI_Isend(send_list, send_n, MPI_INT, friend, rank, MPI_COMM_WORLD, &request);
+        MPI_Recv(recived_list, receive_n, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
 
-        realloc(local_list, (chunks[rank] - send_n + receive_n) * sizeof(int));
+        MPI_Barrier(MPI_COMM_WORLD);
+        printf("Rank %d: Received %d from %d\n", rank, receive_n, friend);
+        print_list(recived_list, receive_n, rank);
 
+
+        if(realloc(local_list, (chunks[rank] - send_n + receive_n) * sizeof(int)) == NULL){
+            printf("Error reallocating memory\n");
+            return -1;
+        }
+
+        MPI_Barrier(MPI_COMM_WORLD);
         merge(remaining_list, recived_list, chunks[rank] - send_n, receive_n, local_list);
+        MPI_Barrier(MPI_COMM_WORLD);
 
-        // Update size of local array
+        // // Update size of local array
         chunks[rank] = chunks[rank] - send_n + receive_n;
-        print_list(local_list, chunks[rank], rank);
-        free(send_list);
-        // Merge sub lists
-        geek_merge(local_list, 0, send_n - 1, chunks[rank]);
+        // print_list(local_list, chunks[rank], rank);
+        free(send_list); // dont like that we have to free and malloc every iteration
+        free(remaining_list);
+        
+
     }
-    print_list(local_list, chunks[rank], rank);
+    // print_list(local_list, chunks[rank], rank);
 
     MPI_Finalize();
 
