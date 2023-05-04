@@ -206,13 +206,13 @@ int main(int argc, char *argv[])
     
 
     // Sort the data locally
+    print_list(local_list, chunks[rank], rank);
     qsort(local_list, chunks[rank], sizeof(int), cmp);
-
+    print_list(local_list, chunks[rank], rank);
     for(int iter = 0; iter < max_iter; iter++)
     {
         limit = num_proc/2; // rank < limit responsible for list smaller than pivot
         int friend = (rank + limit)%num_proc;
-        printf("rank %d friend %d\n", rank, friend);
 
         
         // Perform global sort
@@ -225,22 +225,42 @@ int main(int argc, char *argv[])
         MPI_Bcast(&pivot, 1, MPI_INT, 0, MPI_COMM_WORLD);
         int split_index = split(local_list, pivot);
 
-
         // Send and receive sub lists
         MPI_Status status;
-        int n1 = chunks[rank], n2;             // Sizes of sub lists
-        MPI_Sendrecv(&n1, 1, MPI_INT, friend, rank, &n2, 1, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
-        local_list = (int *)realloc(local_list, (n1 + n2)*sizeof(int));
-        MPI_Sendrecv(local_list, n1, MPI_INT, friend, rank, &local_list[n1], n2, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
-
+        int send_n, receive_n, *temp_list;             
+        if(rank < limit)
+        {   
+            // Sending upper part of sub array
+            send_n = chunks[rank] - split_index;
+            temp_list = (int *)malloc(send_n * sizeof(int));
+            memcpy(temp_list, &local_list[split_index], send_n*sizeof(int));
+        }
+        else
+        {
+            // Sending lower part of sub array
+            send_n = split_index;
+            temp_list = (int *)malloc(send_n * sizeof(int));
+            memcpy(temp_list, local_list, send_n*sizeof(int));
+            memcpy(local_list, &local_list[chunks[rank]-send_n+1], send_n*sizeof(int));
+        }
+        // Sendrecv sizes of subarrays to recv
+        MPI_Sendrecv(&send_n, 1, MPI_INT, friend, rank, &receive_n, 1, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
+        local_list = (int *)realloc(local_list, (chunks[rank] - send_n + receive_n)*sizeof(int));
+        
+        // Sendrecv subarrays
+        MPI_Sendrecv(temp_list, send_n, MPI_INT, friend, rank, &local_list[chunks[rank]-send_n], receive_n, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
+        
+        // Update size of local array
+        chunks[rank] = chunks[rank] - send_n + receive_n;
+        print_list(local_list, chunks[rank], rank);
+        free(temp_list);
         // Merge sub lists
-        geek_merge(local_list, 0, n1, n1+n2);
+        geek_merge(local_list, 0, send_n - 1, chunks[rank]);
     }
-    print_list(local_list, chunk, rank);
+    print_list(local_list, chunks[rank], rank);
 
     MPI_Finalize();
 
     return 0;
 }
 
-// void qsort(void *base, size_t nitems, size_t size, int (*compar)(const void *, const void*))
