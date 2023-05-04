@@ -31,6 +31,10 @@ int split(int *list, const int pivot)
     return split_index;
 }
 
+/*
+
+------------- Not needed ? --------------
+
 void geek_merge(int arr[], int l, int m, int r)
 {
     // From https://www.geeksforgeeks.org/merge-sort/
@@ -38,16 +42,16 @@ void geek_merge(int arr[], int l, int m, int r)
     int n1 = m - l + 1;
     int n2 = r - m;
 
-    /* create temp arrays */
+    // create temp arrays
     int L[n1], R[n2];
 
-    /* Copy data to temp arrays L[] and R[] */
+    // Copy data to temp arrays L[] and R[]
     for (i = 0; i < n1; i++)
         L[i] = arr[l + i];
     for (j = 0; j < n2; j++)
         R[j] = arr[m + 1 + j];
 
-    /* Merge the temp arrays back into arr[l..r]*/
+    
     i = 0; // Initial index of first subarray
     j = 0; // Initial index of second subarray
     k = l; // Initial index of merged subarray
@@ -66,8 +70,7 @@ void geek_merge(int arr[], int l, int m, int r)
         k++;
     }
 
-    /* Copy the remaining elements of L[], if there
-    are any */
+    // Copy the remaining elements of L[], if there are any
     while (i < n1)
     {
         arr[k] = L[i];
@@ -75,8 +78,7 @@ void geek_merge(int arr[], int l, int m, int r)
         k++;
     }
 
-    /* Copy the remaining elements of R[], if there
-    are any */
+    // Copy the remaining elements of R[], if there are any
     while (j < n2)
     {
         arr[k] = R[j];
@@ -84,17 +86,14 @@ void geek_merge(int arr[], int l, int m, int r)
         k++;
     }
 }
-
-void merge(int *list1, int *list2, int n1, int n2)
+*/
+void merge(int *list1, int *list2, int n1, int n2, int *list)
 {
     // With inspiration from https://www.geeksforgeeks.org/merge-sort/
     // Initial indeces of list1, list2 and merged list
     int i = 0, j = 0, k = 0;
 
-    int *list = (int *)malloc((n1 + n2) * sizeof(int));
-
-    
-    while (i < n1-1 && j < n2-1)
+    while (i < n1 - 1 && j < n2 - 1)
     {
         printf("inside merge\n");
         if (list1[i] <= list2[j])
@@ -109,21 +108,21 @@ void merge(int *list1, int *list2, int n1, int n2)
         }
         k++;
     }
-    
-    // Copy remaining elements of list1 and list2
-    // while (i < n1)
-    // {
-    //     list[k] = list1[i];
-    //     i++;
-    //     k++;
-    // }
-    // while (j < n2)
-    // {
-    //     list[k] = list2[j];
-    //     j++;
-    //     k++;
-    // }
-    // print_list(list, n1 + n2, 0);
+
+    Copy remaining elements of list1 and list2
+    while (i < n1)
+    {
+        list[k] = list1[i];
+        i++;
+        k++;
+    }
+    while (j < n2)
+    {
+        list[k] = list2[j];
+        j++;
+        k++;
+    }
+    print_list(list, n1 + n2, 0);
 }
 
 int read_input(const char *file_name, int **input)
@@ -255,7 +254,6 @@ int main(int argc, char *argv[])
 
             memcpy(send_list, &local_list[split_index], send_n * sizeof(int));
             memcpy(remaining_list, local_list, split_index * sizeof(int));
-
         }
         else
         {
@@ -267,10 +265,6 @@ int main(int argc, char *argv[])
 
             memcpy(send_list, local_list, send_n * sizeof(int));
             memcpy(remaining_list, &local_list[split_index], (chunks[rank] - split_index) * sizeof(int));
-
-            printf("rank 1 sending list: \n");
-            print_list(send_list, send_n, rank);
-
         }
 
         // Sendrecv sizes of subarrays to recv
@@ -280,18 +274,9 @@ int main(int argc, char *argv[])
         // Sendrecv subarrays
         MPI_Sendrecv(send_list, send_n, MPI_INT, friend, rank, &recived_list, receive_n, MPI_INT, friend, friend, MPI_COMM_WORLD, &status);
 
-        if (rank == 0)
-        {
-                printf("rank 0 lists\n");
-                print_list(recived_list, receive_n, rank);
-                print_list(remaining_list, chunks[rank] - send_n, rank);
-        }
-
         realloc(local_list, (chunks[rank] - send_n + receive_n) * sizeof(int));
 
-        merge(remaining_list, recived_list, chunks[rank] - send_n, receive_n);
-
-        printf("rank %d: merged\n", rank);
+        merge(remaining_list, recived_list, chunks[rank] - send_n, receive_n, local_list);
 
         // Update size of local array
         chunks[rank] = chunks[rank] - send_n + receive_n;
