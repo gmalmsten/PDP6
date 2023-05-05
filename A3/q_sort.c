@@ -198,8 +198,12 @@ int main(int argc, char *argv[])
     int rank, num_proc;
     
     chunk = chunks[global_rank];
+    int *send_list = (int *)malloc(chunk* sizeof(int));
+    int *remaining_list = (int *)malloc(chunk * sizeof(int));
+    
     for (int iter = 0; iter < max_iter; iter++)
     {
+        
         MPI_Comm_rank(MPI_LOCAL_COMM, &rank);
         MPI_Comm_size(MPI_LOCAL_COMM, &num_proc);
         
@@ -258,28 +262,24 @@ int main(int argc, char *argv[])
         int split_index = split(local_list, pivot, chunk);
         // Send and receive sub lists
         MPI_Status status;
-        int send_n, receive_n, *send_list, *remaining_list;
+        int send_n, receive_n; 
         if (rank < limit) // Send upper part of sub array if rank is in lower part
         {
             // Sending upper part of sub array
             send_n = chunk - split_index;
 
-            send_list = (int *)malloc(send_n * sizeof(int));
-            remaining_list = (int *)malloc(split_index * sizeof(int));
-
+            send_list = (int *)realloc(send_list, send_n*sizeof(int));
+            remaining_list = (int *)realloc(remaining_list, split_index*sizeof(int));
+            
             memcpy(send_list, &local_list[split_index], send_n * sizeof(int));
             memcpy(remaining_list, local_list, split_index * sizeof(int));
-
-            // print list to be sent
-            
         }
         else
         {
             // Sending lower part of sub array
             send_n = split_index;
-
-            send_list = (int *)malloc(send_n * sizeof(int));
-            remaining_list = (int *)malloc((chunk - split_index) * sizeof(int));
+            send_list = (int *)realloc(send_list, send_n*sizeof(int));
+            remaining_list = (int *)realloc(remaining_list, (chunk - split_index)*sizeof(int));
 
             memcpy(send_list, local_list, send_n * sizeof(int));
             memcpy(remaining_list, &local_list[split_index], (chunk - split_index) * sizeof(int));
@@ -288,7 +288,6 @@ int main(int argc, char *argv[])
         
 
         // Sendrecv sizes of subarrays to recv
-
         MPI_Sendrecv(&send_n, 1, MPI_INT, friend, rank, &receive_n, 1, MPI_INT, friend, friend, MPI_LOCAL_COMM, &status);
         int *received_list = (int *)malloc(receive_n * sizeof(int));
 
@@ -297,25 +296,24 @@ int main(int argc, char *argv[])
         MPI_Isend(send_list, send_n, MPI_INT, friend, rank, MPI_LOCAL_COMM, &request);
         MPI_Recv(received_list, receive_n, MPI_INT, friend, friend, MPI_LOCAL_COMM, &status);
         
+        // Update size of local array
         chunk = chunk - send_n + receive_n;
         if(chunk > 0){
             local_list = (int *)realloc(local_list, (chunk) * sizeof(int));
             merge(remaining_list, received_list, remaining_chunk, receive_n, local_list);
         }
         
-        // // Update size of local array
         
-        free(send_list); // dont like that we have to free and malloc every iteration
-        free(remaining_list);
-        
-        // used for splitting the communicator into two this gives lower half
+        // Split the communicator into two halves, those with sub array
+        // below pivot and those with values above pivot
         MPI_Comm_split(MPI_LOCAL_COMM, rank < limit, rank%limit, &MPI_LOCAL_COMM);
         MPI_Comm_rank(MPI_LOCAL_COMM, &rank);
         
-        
-        
     }
 
+    // Clean up
+    free(send_list); 
+    free(remaining_list);
 
     // --------- END TIMER --------- //
     double end_time = MPI_Wtime();
