@@ -155,16 +155,15 @@ int main(int argc, char *argv[])
     }
 
 
-    // --------- START TIMER --------- //
-    double start_time = MPI_Wtime();
-    // --------- START TIMER --------- //
+    
+    // Broadcast size of list
+    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD); 
 
-    MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD); // Broadcast size of list
+    // Sizes of chunks in processors
+    int chunk = n / global_num_proc;     
+    int remainder = n % global_num_proc; 
 
-    int chunk = n / global_num_proc;     // Size of each chunk for each processor
-    int remainder = n % global_num_proc; // Remainder of list size / num_proc
-
-    // Allocate memory for chunks and displacements
+    // Allocate memory for storing chunks and displacements, for Scatterv/Gatherv
     int *chunks = malloc(sizeof(int) * global_num_proc);
     int *displs = malloc(sizeof(int) * global_num_proc);
 
@@ -186,13 +185,9 @@ int main(int argc, char *argv[])
 
     chunks[global_num_proc - 1] += remainder; // Add remainder to last chunk
 
-    // Divide the data into p ~equal parts
-    MPI_Scatterv(global_list, chunks, displs, MPI_INT, local_list, chunk, MPI_INT, 0, MPI_COMM_WORLD);
+    
 
-    // Sort the data locally
-    qsort(local_list, chunks[global_rank], sizeof(int), cmp);
-
-
+    // Create new communicator to split in iterations
     MPI_Comm MPI_LOCAL_COMM;
     MPI_Comm_split(MPI_COMM_WORLD, 0, global_rank, &MPI_LOCAL_COMM);
     int rank, num_proc;
@@ -201,31 +196,39 @@ int main(int argc, char *argv[])
     int *send_list = (int *)malloc(chunk* sizeof(int));
     int *remaining_list = (int *)malloc(chunk * sizeof(int));
     
+
+    // --------- START TIMER --------- //
+    double start_time = MPI_Wtime();
+    // --------- START TIMER --------- //
+
+    // Divide the data into p ~equal parts
+    MPI_Scatterv(global_list, chunks, displs, MPI_INT, local_list, chunk, MPI_INT, 0, MPI_COMM_WORLD);
+
+    // Sort the data locally
+    qsort(local_list, chunks[global_rank], sizeof(int), cmp);
+
+    // Perform global sort
     for (int iter = 0; iter < max_iter; iter++)
     {
-        
         MPI_Comm_rank(MPI_LOCAL_COMM, &rank);
         MPI_Comm_size(MPI_LOCAL_COMM, &num_proc);
         
         limit = num_proc / 2; // rank < limit responsible for list smaller than pivot
         int friend = (rank + limit) % num_proc;
         
-        // Perform global sort
         // Select pivot element within each processor set
         int pivot, median;
         switch (pivot_strategy) {
 
             case 1:
+                // Select the median in one processor in each group of processors.
                 if (rank == 0)
                 {
-                    // Choose pivot strategy
-                    pivot = local_list[chunk / 2]; // Median of communicator(rank 0) from middle of sorted list
+                    pivot = local_list[chunk / 2];
                 }
                 
                 break;
 
-
- 
             case 2:
                 //Select the median of all medians in each processor group.
                 median = local_list[chunk/2];
@@ -241,25 +244,23 @@ int main(int argc, char *argv[])
             case 3:
                 //Select the mean value of all medians in each processor group.
                 median = local_list[chunk/2];
-                int med;
-                MPI_Reduce(&median, &med, 1, MPI_INT, MPI_SUM, 0, MPI_LOCAL_COMM);
-                pivot = med / num_proc;
+                int sum;
+                MPI_Reduce(&median, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_LOCAL_COMM);
+                pivot = sum / num_proc;
                 break;
                 
             default:
-            if(rank == 0)
-            {
-                printf("Invalid pivot strategy\n");
-                printf("Pivot strategy options:\n 1 - Median of middle communicator \n 2 - Median of medians\n 3 - Mean of medians\n");
-                return -1;
-            }
+                if(rank == 0)
+                {
+                    printf("Invalid pivot strategy\n");
+                    printf("Pivot strategy options:\n 1 - Median of middle communicator \n 2 - Median of medians\n 3 - Mean of medians\n");
+                    return -1;
+                }
 
         }
-
         MPI_Bcast(&pivot, 1, MPI_INT, 0, MPI_LOCAL_COMM);
-    
-
         int split_index = split(local_list, pivot, chunk);
+
         // Send and receive sub lists
         MPI_Status status;
         int send_n, receive_n; 
@@ -285,7 +286,6 @@ int main(int argc, char *argv[])
             memcpy(remaining_list, &local_list[split_index], (chunk - split_index) * sizeof(int));
         }
         int remaining_chunk = chunk - send_n;
-        
 
         // Sendrecv sizes of subarrays to recv
         MPI_Sendrecv(&send_n, 1, MPI_INT, friend, rank, &receive_n, 1, MPI_INT, friend, friend, MPI_LOCAL_COMM, &status);
@@ -303,7 +303,6 @@ int main(int argc, char *argv[])
             merge(remaining_list, received_list, remaining_chunk, receive_n, local_list);
         }
         
-        
         // Split the communicator into two halves, those with sub array
         // below pivot and those with values above pivot
         MPI_Comm_split(MPI_LOCAL_COMM, rank < limit, rank%limit, &MPI_LOCAL_COMM);
@@ -311,10 +310,18 @@ int main(int argc, char *argv[])
         
     }
 
+
     // Clean up
     free(send_list); 
     free(remaining_list);
 
+    // Gather the locally sorted lists
+    MPI_Gather(&chunk, 1, MPI_INT, chunks, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    for(int p = 1; p < global_num_proc; p++){
+        displs[p] = displs[p-1] + chunks[p-1];
+    }
+    MPI_Gatherv(local_list, chunk, MPI_INT, global_list, chunks, displs, MPI_INT, 0, MPI_COMM_WORLD);
+    
     // --------- END TIMER --------- //
     double end_time = MPI_Wtime();
     double time = end_time - start_time;
@@ -322,18 +329,12 @@ int main(int argc, char *argv[])
     MPI_Reduce(&time, &max_time, 1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD);
     if (global_rank == 0)
     {
-        printf("Time: %f\n", max_time);
+        printf("%f\n", max_time);
     }
     // --------- END TIMER --------- //
 
-    // Gather all the data
-    MPI_Gather(&chunk, 1, MPI_INT, chunks, 1, MPI_INT, 0, MPI_COMM_WORLD);
-    for(int p = 1; p < global_num_proc; p++){
-        displs[p] = displs[p-1] + chunks[p-1];
-    }
-    MPI_Gatherv(local_list, chunk, MPI_INT, global_list, chunks, displs, MPI_INT, 0, MPI_COMM_WORLD);
-    
 
+    // Check results and print to output file
     if(global_rank == 0){
         for(int i = 0; i < n - 1; i++)
         {
@@ -346,6 +347,8 @@ int main(int argc, char *argv[])
             write_output(output_file, global_list, n);
         #endif
     }
+
+
     // free memory
     free(chunks);
     free(displs);

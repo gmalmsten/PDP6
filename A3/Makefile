@@ -1,8 +1,8 @@
 CC = mpicc
-CCFLAGS = -g -O3
+CCFLAGS = -g -Ofast -march=native
 LIBS = -lm
 
-BINS = q_sort
+BINS = quicksort
 
 all: $(BINS)
 
