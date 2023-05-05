@@ -1,0 +1,27 @@
+1. Divide the data into p equal parts
+
+2. Sort the data locally in each processor
+
+3. Perform global sort
+	3.1 Select pivot in each processor set | Median of rank 0 
+	3.2 In each processor, divide the datainto two sets (smaller or larger)
+	3.3 Split the processors into two groups and exchange data pair-wise
+	3.4 Merge data into a sorted list in each processor
+
+4. Repeat 3.1-3.4 recursively for each
+processor group
+
+
+This is a parallel implementation of the quicksort algorithm using MPI (Message Passing Interface) to distribute the work among multiple processes.
+
+The code reads an input file that contains an array of integers to be sorted. The file should be provided as the first command-line argument. The second argument is the name of the output file where the sorted array will be written. The third argument is the pivot selection strategy, which can be either "first", "random" or "median-of-three".
+
+The main function initializes the MPI environment and retrieves the rank and size of the current process. It then reads the input file on rank 0 and broadcasts the number of elements to all processes. The array is divided into chunks of equal size, and any remaining elements are distributed among the processes. Each process then sorts its chunk of the array using the quicksort algorithm.
+
+The quicksort algorithm is implemented recursively in the quick_sort function. The function selects a pivot element based on the chosen strategy and partitions the array into two parts: one with elements smaller than the pivot and one with elements greater than the pivot. The function then recursively sorts the two parts.
+
+The partition function is used to partition the array into two parts. It takes as input the array, the indices of the first and last elements to be considered, and the pivot element. It moves all elements smaller than the pivot to the left of the pivot and all elements greater than the pivot to the right of the pivot. It returns the index of the pivot element.
+
+Finally, the write_output function writes the sorted array to the output file. It concatenates the sorted chunks from all processes and writes the resulting array to the output file.
+
+Note that the code has some limitations and may not work correctly for certain edge cases. For example, if the number of elements in the array is not divisible by the number of processes, some processes may receive a chunk with fewer elements than others. The code does not handle this case and may produce incorrect results.
