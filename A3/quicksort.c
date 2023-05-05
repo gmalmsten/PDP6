@@ -89,7 +89,8 @@ int read_input(const char *file_name, int **input)
     for (int i = 0; i < n; i++)
     {
         if (EOF == fscanf(file, "%d", &((*input)[i])))
-        {
+        {   
+            printf("i: %d\n", i);
             perror("Couldn't read elements from input file");
             return -1;
         }
@@ -126,7 +127,7 @@ int main(int argc, char *argv[])
     if (argc != 4)
     {
         printf("Usage %s input_file output_file pivot_strategy\n", argv[0]);
-        //----------------------------------------------------------------------------------------------------------------------------//
+        return -1;
     }
 
     char *input_file = argv[1];
