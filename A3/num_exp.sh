@@ -20,3 +20,5 @@ mpirun -np 2 qsort 250000000 out.txt 3 >> weak.txt
 mpirun -np 4 qsort 500000000 out.txt 3 >> weak.txt
 mpirun -np 8 qsort 1000000000 out.txt 3 >> weak.txt
 mpirun -np 16 qsort 2000000000 out.txt 3 >> weak.txt
+
+
