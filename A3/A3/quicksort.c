@@ -4,6 +4,8 @@
 #include <math.h>
 #include <string.h>
 
+#define PRODUCE_OUTPUT_FILE
+
 int print_list(int *list, int n, int rank)
 {
     printf("Rank %d: ", rank);
