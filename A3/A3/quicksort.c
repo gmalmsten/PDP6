@@ -220,7 +220,7 @@ int main(int argc, char *argv[])
         int friend = (rank + limit) % num_proc;
         
         // Select pivot element within each processor set
-        int pivot, median;
+             median;
         switch (pivot_strategy) {
 
             case 1:
