@@ -301,6 +301,7 @@ int main(int argc, char *argv[])
         
         // Update size of local array
         chunk = chunk - send_n + receive_n;
+        printf("Rank %d chunk %d\n", rank, chunk);
         if(chunk > 0){
             local_list = (int *)realloc(local_list, (chunk) * sizeof(int));
             merge(remaining_list, received_list, remaining_chunk, receive_n, local_list);
